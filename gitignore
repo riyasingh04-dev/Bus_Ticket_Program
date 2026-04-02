@@ -1,0 +1,45 @@
+# Python
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# VS Code / IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# React / Node
+frontend/node_modules/
+frontend/dist/
+
+# Build files
+build/
+dist/
+
+# Database files
+*.sqlite3
+*.db
+
+# Temp files
+*.tmp
+*.swp
+
+# Test / coverage
+.coverage
+htmlcov/
+venv/
