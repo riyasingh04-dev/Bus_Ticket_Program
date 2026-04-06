@@ -32,6 +32,23 @@ def modify_bus(bus_id: int, data: BusCreate, db: Session = Depends(get_db), curr
         raise HTTPException(status_code=404, detail="Bus not found or access denied")
     return updated
 
+from datetime import date
+from app.modules.bus.schema import BusCreate, BusResponse, BusSearchListResponse
+from app.modules.bus.service import create_bus, get_buses, update_bus, delete_bus, search_buses
+
+# ... existing routes ...
+
+@router.get("/search", response_model=BusSearchListResponse)
+def search_buses_api(
+    source: str,
+    destination: str,
+    search_date: date = None,
+    db: Session = Depends(get_db)
+):
+    if not search_date:
+        search_date = date.today()
+    return search_buses(db, source, destination, search_date)
+
 @router.delete("/{bus_id}")
 def remove_bus(bus_id: int, db: Session = Depends(get_db), current_user: User = Depends(agent_or_admin)):
     deleted = delete_bus(db, bus_id, current_user.id)

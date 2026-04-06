@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.dependencies import get_db, RoleChecker
-from app.modules.route.schema import RouteCreate, RouteResponse, ScheduleCreate, ScheduleResponse, RouteStoppageCreate, RouteStoppageResponse
-from app.modules.route.service import get_or_create_route, create_schedule, get_schedules, delete_schedule, get_popular_routes, add_route_stoppage, get_route_stoppages, delete_route_stoppage
+from app.modules.route.schema import RouteCreate, RouteResponse, ScheduleCreate, ScheduleResponse, RouteStoppageCreate, RouteStoppageResponse, GetOrCreateScheduleRequest
+from app.modules.route.service import get_or_create_route, create_schedule, get_schedules, delete_schedule, get_popular_routes, add_route_stoppage, get_route_stoppages, delete_route_stoppage, get_or_create_bus_schedule
 from app.modules.auth.model import User
 
 router = APIRouter()
@@ -59,6 +59,10 @@ def remove_schedule(schedule_id: int, db: Session = Depends(get_db), current_use
     if not deleted:
         raise HTTPException(status_code=404, detail="Schedule not found or access denied")
     return {"message": "Schedule deleted successfully"}
+
+@router.post("/schedule/get-or-create", response_model=ScheduleResponse)
+def get_or_create_schedule_api(data: GetOrCreateScheduleRequest, db: Session = Depends(get_db)):
+    return get_or_create_bus_schedule(db, data.bus_id, data.travel_date)
 
 
 @router.get("/popular")

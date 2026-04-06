@@ -33,13 +33,14 @@ dist/
 
 # Database files
 *.sqlite3
+*.sqlite
 *.db
 
 # Temp files
 *.tmp
 *.swp
+tmp/
 
 # Test / coverage
 .coverage
 htmlcov/
-venv/

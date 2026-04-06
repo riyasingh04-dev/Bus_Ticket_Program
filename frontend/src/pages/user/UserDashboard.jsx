@@ -14,20 +14,45 @@ const UserDashboard = () => {
   const [date, setDate] = useState('');
   const [busType, setBusType] = useState('');
   const [popularRoutes, setPopularRoutes] = useState([]);
-  const [cities, setCities] = useState([]);
+  const [locations, setLocations] = useState([]); // Combined cities and stops
   const [routesLoading, setRoutesLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
+      setRoutesLoading(true);
+      const token = localStorage.getItem('token');
+      const authHeader = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+      
       try {
-        const [routesRes, citiesRes] = await Promise.all([
-          axios.get('http://localhost:8000/routes/popular?limit=6'),
-          axios.get('http://localhost:8000/masters/cities')
-        ]);
-        setPopularRoutes(routesRes.data);
-        setCities(citiesRes.data);
-      } catch {
-        setPopularRoutes([]);
+        // Fetch cities (main priority)
+        let cities = [];
+        try {
+          const cRes = await axios.get('http://localhost:8000/masters/cities', authHeader);
+          cities = cRes.data || [];
+        } catch (e) { console.error("Cities fetch failed", e); }
+
+        // Fetch stops
+        let stops = [];
+        try {
+          const sRes = await axios.get('http://localhost:8000/masters/stops', authHeader);
+          stops = sRes.data || [];
+        } catch (e) { console.error("Stops fetch failed", e); }
+
+        // Combine for dropdowns
+        const combined = [
+          ...cities.map(c => ({ id: `city-${c.id}`, name: c.name })),
+          ...stops.map(s => ({ id: `stop-${s.id}`, name: s.name }))
+        ];
+        setLocations(combined);
+
+        // Fetch popular routes
+        try {
+          const rRes = await axios.get('http://localhost:8000/routes/popular?limit=6', authHeader);
+          setPopularRoutes(rRes.data || []);
+        } catch (e) { console.error("Popular routes fetch failed", e); }
+
+      } catch (err) {
+        console.error("Critical error in fetchData", err);
       } finally {
         setRoutesLoading(false);
       }
@@ -42,11 +67,11 @@ const UserDashboard = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    const srcName = cities.find(c => String(c.id) === String(source))?.name || '';
-    const destName = cities.find(c => String(c.id) === String(destination))?.name || '';
+    const srcName = locations.find(l => String(l.id) === String(source))?.name || '';
+    const destName = locations.find(l => String(l.id) === String(destination))?.name || '';
     
     if (!srcName || !destName) return;
-
+    
     navigate(`/user/search?source=${encodeURIComponent(srcName)}&destination=${encodeURIComponent(destName)}`);
   };
 
@@ -71,7 +96,7 @@ const UserDashboard = () => {
               <div style={{ flex: 1 }}>
                 <SearchableSelect 
                   label="From City" 
-                  options={cities} 
+                  options={locations} 
                   placeholder="Select Departure"
                   value={source}
                   onChange={setSource}
@@ -85,7 +110,7 @@ const UserDashboard = () => {
               <div style={{ flex: 1 }}>
                 <SearchableSelect 
                   label="To City" 
-                  options={cities} 
+                  options={locations} 
                   placeholder="Select Destination"
                   value={destination}
                   onChange={setDestination}

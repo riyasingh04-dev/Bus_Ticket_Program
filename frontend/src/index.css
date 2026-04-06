@@ -1757,6 +1757,184 @@ td {
   margin-top: 24px;
 }
 
+.payment-page {
+  padding: 40px;
+  background: var(--light);
+  min-height: calc(100vh - 64px);
+}
+
+.payment-body {
+  max-width: 900px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 32px;
+}
+
+.payment-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  padding: 32px;
+  box-shadow: var(--shadow-md);
+}
+
+.payment-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  color: var(--dark);
+}
+
+.payment-route-box {
+  background: var(--primary-light);
+  padding: 20px;
+  border-radius: var(--radius-md);
+  margin-bottom: 24px;
+}
+
+.payment-route-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 12px;
+}
+
+.payment-seats-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.payment-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.payment-info-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.payment-info-grid span {
+  font-size: 11px;
+  color: var(--gray-light);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.payment-info-grid strong {
+  font-size: 14px;
+  color: var(--dark);
+}
+
+.payment-price-box {
+  margin-bottom: 24px;
+}
+
+.payment-trust-row {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 8px;
+  color: var(--gray);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.payment-trust-row span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.payment-disclaimer {
+  text-align: center;
+  font-size: 11px;
+  color: var(--gray-light);
+  margin-top: 16px;
+  line-height: 1.5;
+}
+
+/* Card Form Styles */
+.card-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-input-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-family: inherit;
+  transition: all 0.2s;
+  background: var(--light);
+}
+
+.card-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+.card-input.error {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.card-input-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.payment-error {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+  .payment-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+
 /* ============================================================
    CONFIRMATION & TICKET
    ============================================================ */

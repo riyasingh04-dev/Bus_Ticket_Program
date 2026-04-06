@@ -4,7 +4,7 @@ import axios from 'axios';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
   Search, MapPin, ArrowLeftRight, ArrowRight, Bus,
-  Wind, Moon, Clock, ChevronLeft, AlertCircle
+  Wind, Moon, Clock, Calendar, AlertCircle, CheckCircle, Info
 } from 'lucide-react';
 
 const SearchBuses = () => {
@@ -13,53 +13,73 @@ const SearchBuses = () => {
 
   const [source, setSource] = useState(searchParams.get('source') || '');
   const [destination, setDestination] = useState(searchParams.get('destination') || '');
-  const [cities, setCities] = useState([]);
-  const [schedules, setSchedules] = useState([]);
+  const [travelDate, setTravelDate] = useState(searchParams.get('date') || new Date().toISOString().split('T')[0]);
+  const [locations, setLocations] = useState([]); 
+  const [searchResults, setSearchResults] = useState({ results: [], suggestions: [] });
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-
+  
   useEffect(() => {
-    const fetchCities = async () => {
+    const fetchLocations = async () => {
+      const token = localStorage.getItem('token');
+      const authHeader = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+      
       try {
-        const res = await axios.get('http://localhost:8000/masters/cities');
-        setCities(res.data);
+        let cities = [];
+        try {
+          const cRes = await axios.get('http://localhost:8000/masters/cities', authHeader);
+          cities = cRes.data || [];
+        } catch (e) { console.error("Cities fetch failed", e); }
+
+        let stops = [];
+        try {
+          const sRes = await axios.get('http://localhost:8000/masters/stops', authHeader);
+          stops = sRes.data || [];
+        } catch (e) { console.error("Stops fetch failed", e); }
         
-        // If we have names in params, try to map to IDs for the dropdowns
-        const srcCity = res.data.find(c => c.name === searchParams.get('source'));
-        const destCity = res.data.find(c => c.name === searchParams.get('destination'));
-        if (srcCity) setSource(srcCity.id);
-        if (destCity) setDestination(destCity.id);
+        const combined = [
+          ...cities.map(c => ({ id: `city-${c.id}`, name: c.name })),
+          ...stops.map(s => ({ id: `stop-${s.id}`, name: s.name }))
+        ];
+        setLocations(combined);
+        
+        const srcLoc = combined.find(l => l.name === searchParams.get('source'));
+        const destLoc = combined.find(l => l.name === searchParams.get('destination'));
+        if (srcLoc) setSource(srcLoc.id);
+        if (destLoc) setDestination(destLoc.id);
         
         if (searchParams.get('source') && searchParams.get('destination')) {
-          doSearch(searchParams.get('source'), searchParams.get('destination'));
+          doSearch(searchParams.get('source'), searchParams.get('destination'), travelDate);
         }
       } catch (err) {
-        console.error("Failed to load cities");
+        console.error("Failed to load locations", err);
       }
     };
-    fetchCities();
-  }, []);
-
-  const doSearch = async (srcName, destName) => {
+    fetchLocations();
+  }, [searchParams, travelDate]);
+  
+  const doSearch = async (srcName, destName, date) => {
     setLoading(true);
     setSearched(true);
     try {
       const res = await axios.get(
-        `http://localhost:8000/routes/schedule/search?source=${encodeURIComponent(srcName)}&destination=${encodeURIComponent(destName)}`
+        `http://localhost:8000/buses/search?source=${encodeURIComponent(srcName)}&destination=${encodeURIComponent(destName)}&search_date=${date}`
       );
-      setSchedules(res.data);
+      setSearchResults(res.data);
     } catch {
-      setSchedules([]);
+      setSearchResults({ results: [], suggestions: [] });
     }
     setLoading(false);
   };
-
+  
   const handleSearch = (e) => {
     e.preventDefault();
-    const srcName = cities.find(c => String(c.id) === String(source))?.name || '';
-    const destName = cities.find(c => String(c.id) === String(destination))?.name || '';
+    const srcName = locations.find(l => String(l.id) === String(source))?.name || '';
+    const destName = locations.find(l => String(l.id) === String(destination))?.name || '';
     if (srcName && destName) {
-      doSearch(srcName, destName);
+      setLoading(true);
+      setSearched(true);
+      doSearch(srcName, destName, travelDate);
     }
   };
 
@@ -69,32 +89,101 @@ const SearchBuses = () => {
     setDestination(tmp);
   };
 
-  const handleSelectBus = (sch) => {
-    navigate(`/user/book/${sch.id}`, { state: { schedule: sch } });
+  const handleSelectBus = async (res) => {
+    // 1. Get final date (current travelDate or the next available date)
+    const finalDate = res.available ? travelDate : res.next_available_date;
+    
+    try {
+      setLoading(true);
+      // 2. Call backend to get or create a fixed schedule for this bus and date
+      const scheduleRes = await axios.post('http://localhost:8000/routes/schedule/get-or-create', {
+        bus_id: res.bus.id,
+        travel_date: finalDate
+      });
+      
+      const schedule = scheduleRes.data;
+      
+      // 3. Navigate to booking with the real scheduleId
+      navigate(`/user/book/${schedule.id}`, { 
+        state: { 
+          schedule: schedule, 
+          date: finalDate 
+        } 
+      });
+    } catch (err) {
+      console.error("Failed to prepare schedule", err);
+      alert("Something went wrong while preparing your booking. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderBusCard = (res, i, isSuggestion = false) => {
+    const { bus, available, availability_message, next_available_date, pattern_label } = res;
+    
+    return (
+      <div key={bus.id} className={`bus-card animate-fade-up ${!available ? 'unavailable' : ''}`} style={{ animationDelay: `${i * 0.05}s`, marginBottom: '16px' }}>
+        <div className="bus-card-left">
+          <div className="bus-card-route">
+            <span className="bus-card-city">{bus.source || 'Unknown'}</span>
+            <ArrowRight size={20} style={{ color: 'var(--gray-light)' }} />
+            <span className="bus-card-city">{bus.destination || 'Unknown'}</span>
+          </div>
+          <div className="bus-card-meta">
+            <span className="bus-badge"><Bus size={12} />{bus.name}</span>
+            {bus.is_ac && <span className="bus-badge ac"><Wind size={12} /> AC</span>}
+            <span className="bus-badge time"><Clock size={12} /> {bus.departure_time || 'N/A'}</span>
+            <span className="bus-badge pattern"><Info size={12} /> {pattern_label}</span>
+          </div>
+          
+          {!available && (
+            <div className="availability-notice danger">
+              <AlertCircle size={14} />
+              <span>{availability_message}</span>
+            </div>
+          )}
+          {available && (
+            <div className="availability-notice success">
+              <CheckCircle size={14} />
+              <span>Available on selected date</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="bus-card-right">
+          <div className="bus-price">₹{bus.price || 499}</div>
+          <div className="bus-price-label">per seat</div>
+          <button 
+            className={`btn-book ${!available ? 'btn-secondary' : ''}`} 
+            onClick={() => handleSelectBus(res)}
+          >
+            {available ? 'Select & Book' : 'Book for Next Date'}
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="animate-fade-in">
-      {/* ── Small Hero ── */}
       <section className="hero-section hero-sm">
         <h1 className="hero-title" style={{ fontSize: '36px' }}>Find Your Bus</h1>
         <p className="hero-subtitle">
           {searched && !loading
-            ? `${schedules.length} bus${schedules.length !== 1 ? 'es' : ''} found`
+            ? `${searchResults.results.length} bus${searchResults.results.length !== 1 ? 'es' : ''} found`
             : 'Explore schedules on our premium network'}
         </p>
       </section>
 
-      {/* ── Inline Search ── */}
       <div className="search-card-wrapper" style={{ marginBottom: '12px' }}>
         <div className="search-card" style={{ padding: '24px 32px' }}>
           <form onSubmit={handleSearch}>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 200px' }}>
                 <SearchableSelect 
                   label="Departure"
                   placeholder="From..."
-                  options={cities}
+                  options={locations}
                   value={source}
                   onChange={setSource}
                 />
@@ -104,18 +193,34 @@ const SearchBuses = () => {
                   <ArrowLeftRight size={16} />
                 </button>
               </div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: '1 1 200px' }}>
                 <SearchableSelect 
                   label="Destination"
                   placeholder="To..."
-                  options={cities}
+                  options={locations}
                   value={destination}
                   onChange={setDestination}
                 />
               </div>
+              <div style={{ flex: '0 0 180px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: 'var(--gray)', marginBottom: '8px' }}>
+                  Travel Date
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    type="date" 
+                    value={travelDate}
+                    onChange={(e) => setTravelDate(e.target.value)}
+                    className="sc-input"
+                    style={{ width: '100%', height: '44px', paddingLeft: '40px' }}
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                  <Calendar size={16} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--gray)' }} />
+                </div>
+              </div>
               <button
                 type="submit" className="sc-search-btn"
-                style={{ flex: 0, width: 'auto', padding: '12px 24px', whiteSpace: 'nowrap', height: '44px', marginBottom: '10px' }}
+                style={{ flex: 1, height: '44px', marginBottom: '0' }}
                 disabled={loading || !source || !destination}
               >
                 {loading ? 'Searching...' : <><Search size={16} /> Search</>}
@@ -125,7 +230,6 @@ const SearchBuses = () => {
         </div>
       </div>
 
-      {/* ── Results ── */}
       <div className="results-section">
         {loading && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--gray)' }}>
@@ -134,47 +238,63 @@ const SearchBuses = () => {
           </div>
         )}
 
-        {!loading && searched && schedules.length === 0 && (
+        {!loading && searched && searchResults.results.length === 0 && searchResults.suggestions.length === 0 && (
           <div className="empty-state">
             <div className="empty-state-icon"><Bus size={36} /></div>
             <h3>No buses found</h3>
-            <p>We couldn't find any schedules for this route today.</p>
+            <p>We couldn't find any buses matching your search criteria.</p>
             <button className="btn-primary" onClick={() => navigate('/user')}>
               Return to Dashboard
             </button>
           </div>
         )}
 
-        {!loading && schedules.map((sch, i) => (
-          <div key={sch.id} className="bus-card animate-fade-up" style={{ animationDelay: `${i * 0.05}s` }}>
-            <div className="bus-card-left">
-              <div className="bus-card-route">
-                <span className="bus-card-city">{sch.route?.source_city?.name}</span>
-                <ArrowRight size={20} style={{ color: 'var(--gray-light)' }} />
-                <span className="bus-card-city">{sch.route?.destination_city?.name}</span>
-              </div>
-              <div className="bus-card-meta">
-                <span className="bus-badge"><Bus size={12} />{sch.bus?.name}</span>
-                {sch.bus?.is_ac && <span className="bus-badge ac"><Wind size={12} /> AC</span>}
-                {sch.bus?.bus_type?.name && <span className="bus-badge sleeper"><Moon size={12} />{sch.bus?.bus_type?.name}</span>}
-                <span className="bus-badge time">
-                  <Clock size={12} />
-                  {new Date(sch.departure_time).toLocaleString('en-IN', {
-                    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-                  })}
-                </span>
-              </div>
-            </div>
-            <div className="bus-card-right">
-              <div className="bus-price">₹{sch.price}</div>
-              <div className="bus-price-label">per seat</div>
-              <button className="btn-book" onClick={() => handleSelectBus(sch)}>
-                Select &amp; Book
-              </button>
-            </div>
+        {!loading && searchResults.results.length > 0 && (
+          <div className="results-list">
+            <h4 style={{ marginBottom: '16px', color: 'var(--gray)' }}>Available Routes</h4>
+            {searchResults.results.map((res, i) => renderBusCard(res, i))}
           </div>
-        ))}
+        )}
+
+        {!loading && searchResults.suggestions.length > 0 && (
+          <div className="suggestions-list" style={{ marginTop: '32px' }}>
+            <h4 style={{ marginBottom: '16px', color: 'var(--gray)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertCircle size={18} /> Suggested Alternatives
+            </h4>
+            {searchResults.suggestions.map((res, i) => renderBusCard(res, i, true))}
+          </div>
+        )}
       </div>
+
+      <style jsx>{`
+        .availability-notice {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-size: 13px;
+          margin-top: 12px;
+        }
+        .availability-notice.success {
+          background: #f0fdf4;
+          color: #166534;
+          border: 1px solid #bbf7d0;
+        }
+        .availability-notice.danger {
+          background: #fef2f2;
+          color: #991b1b;
+          border: 1px solid #fecaca;
+        }
+        .bus-card.unavailable {
+          opacity: 0.85;
+          border-left: 4px solid #ef4444;
+        }
+        .bus-badge.pattern {
+          background: #f1f5f9;
+          color: #475569;
+        }
+      `}</style>
     </div>
   );
 };

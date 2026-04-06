@@ -115,21 +115,20 @@ const PassengerDetails = () => {
     return errs;
   };
 
-  // ── Submit → Finalize Booking ─────────────────────────────────────────────
-  const handleSubmit = async (e) => {
+  // ── Submit → Transition to Payment ──────────────────────────────────────────
+  const handleSubmit = (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     
-    setSubmitting(true);
-    const token = localStorage.getItem('token');
-    
-    try {
-      const res = await axios.post(
-        'http://localhost:8000/bookings/',
-        {
-          schedule_id: parseInt(scheduleId),
-          seat_numbers: selectedSeats.join(','),
+    // Instead of calling backend, we go to payment simulator
+    navigate('/user/payment', {
+      state: {
+        scheduleId: parseInt(scheduleId),
+        schedule,
+        selectedSeats,
+        lockExpiry,
+        passenger: {
           passenger_name: form.passenger_name,
           passenger_phone: form.passenger_phone,
           passenger_age: parseInt(form.passenger_age),
@@ -137,27 +136,17 @@ const PassengerDetails = () => {
           boarding_stop_id: form.boarding_stop_id ? parseInt(form.boarding_stop_id) : null,
           dropping_stop_id: form.dropping_stop_id ? parseInt(form.dropping_stop_id) : null,
         },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Success -> Redirect to confirmation
-      navigate('/user/confirmation', { 
-        state: { 
-          booking: res.data, 
-          schedule, 
-          selectedSeats, 
-          passenger: form,
-          boardingStop: stoppages.find(s => s.stop_id === parseInt(form.boarding_stop_id)),
-          droppingStop: stoppages.find(s => s.stop_id === parseInt(form.dropping_stop_id))
-        }, 
-        replace: true 
-      });
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Booking failed. Your seat lock may have expired.');
-      navigate(`/user/book/${scheduleId}`, { state: { schedule } });
-    } finally {
-      setSubmitting(false);
-    }
+        pricing: {
+          baseTotal,
+          taxAmount,
+          discountAmount,
+          finalTotal
+        },
+        stoppages, // to help with confirmation page later
+        boardingStop: stoppages.find(s => s.stop_id === parseInt(form.boarding_stop_id)),
+        droppingStop: stoppages.find(s => s.stop_id === parseInt(form.dropping_stop_id))
+      }
+    });
   };
 
   return (

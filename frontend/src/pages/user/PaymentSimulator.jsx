@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   CreditCard, Shield, Lock, AlertCircle, ArrowRight,
-  CheckCircle, RefreshCw, ChevronLeft
+  CheckCircle, RefreshCw, ChevronLeft, User
 } from 'lucide-react';
 
 const PaymentSimulator = () => {
@@ -11,13 +11,22 @@ const PaymentSimulator = () => {
   const navigate = useNavigate();
   const {
     schedule, scheduleId, selectedSeats = [],
-    passenger = {}, pricing = {}, lockExpiry
+    passenger = {}, pricing = {}, lockExpiry,
+    stoppages = [], boardingStop = null, droppingStop = null
   } = location.state || {};
 
   const [phase, setPhase] = useState('review'); // 'review' | 'processing' | 'done' | 'failed'
   const [booked, setBooked] = useState(false);
   const [error, setError] = useState('');
-  const hasSubmitted = useRef(false); // prevent double submit
+  const [formErrors, setFormErrors] = useState({});
+  const hasSubmitted = useRef(false);
+
+  const [cardDetails, setCardDetails] = useState({
+    number: '',
+    expiry: '',
+    cvv: '',
+    name: ''
+  });
 
   const { finalTotal = 0, baseTotal = 0, taxAmount = 0, discountAmount = 0 } = pricing;
 
@@ -46,8 +55,45 @@ const PaymentSimulator = () => {
     return () => clearInterval(id);
   }, [lockExpiry, phase]);
 
-  const handlePay = async () => {
+  const handleInputChange = (e) => {
+    let { name, value } = e.target;
+    
+    if (name === 'number') {
+      // Remove non-digits and limit to 16
+      value = value.replace(/\D/g, '').substring(0, 16);
+      // Add spaces every 4 digits
+      value = value.match(/.{1,4}/g)?.join(' ') || value;
+    } else if (name === 'expiry') {
+      value = value.replace(/\D/g, '').substring(0, 4);
+      if (value.length >= 2) value = value.substring(0, 2) + '/' + value.substring(2);
+    } else if (name === 'cvv') {
+      value = value.replace(/\D/g, '').substring(0, 4);
+    }
+
+    setCardDetails({ ...cardDetails, [name]: value });
+    setFormErrors({ ...formErrors, [name]: '' });
+  };
+
+  const validateCard = () => {
+    const errs = {};
+    const cleanNum = cardDetails.number.replace(/\s/g, '');
+    if (cleanNum.length !== 16) errs.number = 'Enter a valid 16-digit card number.';
+    if (!/^\d{2}\/\d{2}$/.test(cardDetails.expiry)) errs.expiry = 'Use MM/YY format.';
+    if (cardDetails.cvv.length < 3) errs.cvv = 'Invalid CVV.';
+    if (!cardDetails.name.trim()) errs.name = 'Cardholder name is required.';
+    return errs;
+  };
+
+  const handlePay = async (e) => {
+    e.preventDefault();
     if (hasSubmitted.current) return;
+
+    const errs = validateCard();
+    if (Object.keys(errs).length > 0) {
+      setFormErrors(errs);
+      return;
+    }
+
     hasSubmitted.current = true;
     setPhase('processing');
 
@@ -71,6 +117,7 @@ const PaymentSimulator = () => {
       const msg = err.response?.data?.detail || 'Booking failed. Please try again.';
       setPhase('failed');
       setError(msg);
+      hasSubmitted.current = false;
     }
   };
 
@@ -98,13 +145,13 @@ const PaymentSimulator = () => {
     return (
       <div className="payment-overlay">
         <div className="payment-failed-card">
-          <div className="payment-fail-icon">
+          <div className="payment-fail-icon" style={{ backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', padding: '20px', borderRadius: '50%', display: 'inline-block', marginBottom: '24px' }}>
             <AlertCircle size={48} />
           </div>
           <h2>Payment Failed</h2>
-          <p className="payment-error-msg">{error || 'Your seats have been released. You can try again or go back to search.'}</p>
-          <div style={{ display: 'flex', gap: '12px', marginTop: '28px', justifyContent: 'center' }}>
-            <button className="btn-secondary" onClick={() => navigate('/user/search')}>
+          <p className="payment-error-msg" style={{ marginTop: '16px', color: 'var(--gray)' }}>{error || 'Your seats have been released. You can try again or go back to search.'}</p>
+          <div style={{ display: 'flex', gap: '12px', marginTop: '32px', justifyContent: 'center' }}>
+            <button className="user-logout-btn" onClick={() => navigate('/user/search')}>
               <ChevronLeft size={16} /> Back to Search
             </button>
             <button className="sc-search-btn" style={{ flex: 'none', padding: '12px 28px' }} onClick={handleRetry}>
@@ -118,16 +165,24 @@ const PaymentSimulator = () => {
 
   // ── SUCCESS → redirect ────────────────────────────────────────────────────
   if (phase === 'done' && booked) {
-    navigate('/user/confirmation', { state: { booking: booked, schedule, selectedSeats, passenger }, replace: true });
+    navigate('/user/confirmation', { 
+      state: { 
+        booking: booked, 
+        schedule, 
+        selectedSeats, 
+        passenger,
+        boardingStop,
+        droppingStop
+      }, 
+      replace: true 
+    });
     return null;
   }
 
-  // ── REVIEW / PAY screen ───────────────────────────────────────────────────
   return (
     <div className="payment-page">
-      {/* Step indicator */}
       <div className="passenger-topbar">
-        <button className="btn-secondary" onClick={() => navigate(-1)}>
+        <button className="user-logout-btn" onClick={() => navigate(-1)}>
           <ChevronLeft size={16} /> Back
         </button>
         <div className="step-indicator">
@@ -141,74 +196,116 @@ const PaymentSimulator = () => {
       </div>
 
       <div className="payment-body">
-        <div className="payment-card">
-          <h2 className="payment-title">Order Summary</h2>
-
-          {/* Route */}
-          <div className="payment-route-box">
-            <div className="payment-route-text">
-              {schedule?.route?.source}
-              <ArrowRight size={16} />
-              {schedule?.route?.destination}
+        {/* Left Side: Card Form */}
+        <div className="payment-card animate-fade-up">
+          <h2 className="payment-title">Secure Payment</h2>
+          
+          <form onSubmit={handlePay} className="card-form">
+            <div className="card-input-group">
+              <label><User size={13} /> Cardholder Name</label>
+              <input
+                name="name"
+                className={`card-input ${formErrors.name ? 'error' : ''}`}
+                placeholder="Full Name as on Card"
+                value={cardDetails.name}
+                onChange={handleInputChange}
+              />
+              {formErrors.name && <span className="pf-error">{formErrors.name}</span>}
             </div>
-            <div className="payment-seats-badges">
-              {selectedSeats.map(s => <span key={s} className="seat-pill">{s}</span>)}
-            </div>
-          </div>
 
-          {/* Passenger */}
-          <div className="payment-info-grid">
-            <div><span>Passenger</span><strong>{passenger.passenger_name || '—'}</strong></div>
-            <div><span>Mobile</span><strong>{passenger.passenger_phone || '—'}</strong></div>
-            <div><span>Age</span><strong>{passenger.passenger_age || '—'}</strong></div>
-            <div><span>Bus</span><strong>{schedule?.bus?.name || '—'}</strong></div>
-            <div><span>Departure</span>
-              <strong>
-                {schedule?.departure_time
-                  ? new Date(schedule.departure_time).toLocaleString('en-IN', {
-                      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-                    })
-                  : '—'}
-              </strong>
+            <div className="card-input-group">
+              <label><CreditCard size={13} /> Card Number</label>
+              <input
+                name="number"
+                className={`card-input ${formErrors.number ? 'error' : ''}`}
+                placeholder="0000 0000 0000 0000"
+                value={cardDetails.number}
+                onChange={handleInputChange}
+                maxLength={19}
+              />
+              {formErrors.number && <span className="pf-error">{formErrors.number}</span>}
             </div>
-          </div>
 
-          {/* Price breakdown */}
-          <div className="payment-price-box">
-            <div className="summary-row"><span>Base Fare</span><span>₹{baseTotal.toFixed(2)}</span></div>
-            <div className="summary-row"><span>GST (5%)</span><span>+₹{taxAmount.toFixed(2)}</span></div>
-            {discountAmount > 0 && (
-              <div className="summary-row" style={{ color: 'var(--success)' }}>
-                <span>Coupon ({passenger.coupon_code})</span>
-                <span>−₹{discountAmount.toFixed(2)}</span>
+            <div className="card-input-row">
+              <div className="card-input-group">
+                <label>Expiry Date</label>
+                <input
+                  name="expiry"
+                  className={`card-input ${formErrors.expiry ? 'error' : ''}`}
+                  placeholder="MM/YY"
+                  value={cardDetails.expiry}
+                  onChange={handleInputChange}
+                  maxLength={5}
+                />
+                {formErrors.expiry && <span className="pf-error">{formErrors.expiry}</span>}
               </div>
-            )}
-            <div className="summary-divider" />
-            <div className="summary-row summary-total">
-              <span>Total Payable</span>
-              <span>₹{finalTotal.toFixed(2)}</span>
+              <div className="card-input-group">
+                <label><Lock size={13} /> CVV</label>
+                <input
+                  name="cvv"
+                  type="password"
+                  className={`card-input ${formErrors.cvv ? 'error' : ''}`}
+                  placeholder="•••"
+                  value={cardDetails.cvv}
+                  onChange={handleInputChange}
+                  maxLength={4}
+                />
+                {formErrors.cvv && <span className="pf-error">{formErrors.cvv}</span>}
+              </div>
+            </div>
+
+            <div className="payment-trust-row" style={{ marginTop: '12px' }}>
+              <span><Shield size={14} /> 100% Secure</span>
+              <span><Lock size={14} /> 256-bit SSL</span>
+            </div>
+
+            <button type="submit" className="sc-search-btn" style={{ marginTop: '8px' }}>
+              <CreditCard size={18} /> Pay ₹{finalTotal.toFixed(2)}
+            </button>
+            <p className="payment-disclaimer">
+              Your transaction is secured with industry-standard encryption. 
+              Seats are reserved only after successful payment.
+            </p>
+          </form>
+        </div>
+
+        {/* Right Side: Summary Card */}
+        <div className="payment-summary-panel">
+          <div className="booking-summary-sticky" style={{ position: 'sticky', top: '20px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '20px' }}>Fare Brief</h3>
+            
+            <div className="payment-route-box">
+              <div className="payment-route-text">
+                {schedule?.route?.source_city?.name}
+                <ArrowRight size={14} />
+                {schedule?.route?.destination_city?.name}
+              </div>
+              <div className="payment-seats-badges">
+                {selectedSeats.map(s => <span key={s} className="seat-pill">{s}</span>)}
+              </div>
+            </div>
+
+            <div className="summary-rows">
+              <div className="summary-row"><span>Base Fare</span><span>₹{baseTotal.toFixed(2)}</span></div>
+              <div className="summary-row"><span>Taxes</span><span>₹{taxAmount.toFixed(2)}</span></div>
+              {discountAmount > 0 && (
+                <div className="summary-row" style={{ color: 'var(--success)' }}>
+                  <span>Discount</span><span>−₹{discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="summary-divider" style={{ margin: '16px 0' }} />
+              <div className="summary-row summary-total" style={{ fontSize: '22px', color: 'var(--primary)' }}>
+                <span>Total</span>
+                <span>₹{finalTotal.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '24px', padding: '16px', backgroundColor: 'var(--primary-light)', borderRadius: '12px', border: '1px dashed var(--primary)' }}>
+              <div style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 600, marginBottom: '4px' }}>Passenger</div>
+              <div style={{ fontSize: '14px', fontWeight: 700 }}>{passenger.passenger_name}</div>
+              <div style={{ fontSize: '13px', color: 'var(--gray)', marginTop: '4px' }}>{passenger.passenger_phone}</div>
             </div>
           </div>
-
-          {/* Security badges */}
-          <div className="payment-trust-row">
-            <span><Shield size={14} /> 100% Secure</span>
-            <span><Lock size={14} /> Encrypted</span>
-            <span><CreditCard size={14} /> All cards accepted</span>
-          </div>
-
-          {/* Pay button */}
-          <button
-            className="sc-search-btn"
-            style={{ marginTop: '24px', fontSize: '18px', padding: '16px' }}
-            onClick={handlePay}
-          >
-            <CreditCard size={20} />
-            Pay ₹{finalTotal.toFixed(2)}
-          </button>
-          <p className="payment-disclaimer">
-            By clicking "Pay", you agree to our terms. Seats are confirmed on successful payment.
-          </p>
         </div>
       </div>
     </div>

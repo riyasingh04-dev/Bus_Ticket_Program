@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List
 from app.modules.bus.schema import BusResponse
 from app.modules.master.schema import CityResponse, StopResponse, HotelResponse
@@ -56,3 +56,7 @@ class ScheduleResponse(ScheduleBase):
     
     class Config:
         from_attributes = True
+
+class GetOrCreateScheduleRequest(BaseModel):
+    bus_id: int
+    travel_date: date
