@@ -43,50 +43,85 @@ from datetime import date, timedelta
 from app.utils.availability import is_available, get_next_available_date, get_pattern_label
 
 def search_buses(db: Session, source: str, destination: str, search_date: date):
-    # 1. Filter buses by source and destination
-    # Case-insensitive partial match
-    query = db.query(Bus).filter(
-        Bus.source.ilike(f"%{source}%"),
-        Bus.destination.ilike(f"%{destination}%")
+    from app.modules.route.model import RouteStoppage, Route, Schedule
+    from app.modules.master.model import Stop
+    from sqlalchemy.orm import aliased
+
+    # 1. Aliases for source and destination stops
+    SrcStop = aliased(Stop)
+    DestStop = aliased(Stop)
+    SrcRS = aliased(RouteStoppage)
+    DestRS = aliased(RouteStoppage)
+
+    # 2. Find schedules whose Route satisfies the segment search
+    # Logic: Join Schedule -> Route -> RouteStoppages (twice)
+    # Match stop names and validate sequence order
+    query = (
+        db.query(Schedule, SrcRS.price_from_start, DestRS.price_from_start)
+        .join(Route, Schedule.route_id == Route.id)
+        .join(SrcRS, Route.id == SrcRS.route_id)
+        .join(SrcStop, SrcRS.stop_id == SrcStop.id)
+        .join(DestRS, Route.id == DestRS.route_id)
+        .join(DestStop, DestRS.stop_id == DestStop.id)
+        .filter(SrcStop.name.ilike(f"%{source}%"))
+        .filter(DestStop.name.ilike(f"%{destination}%"))
+        .filter(SrcRS.stop_order < DestRS.stop_order)
     )
-    
-    buses = query.all()
+
+    schedules_with_prices = query.all()
     results = []
-    
-    for b in buses:
-        available = is_available(b, search_date)
+
+    for sch, src_p, dest_p in schedules_with_prices:
+        bus = sch.bus
+        if not bus: continue
+        
+        available = is_available(bus, search_date)
         next_date = None
         message = None
         
         if not available:
-            next_date = get_next_available_date(b, search_date)
+            next_date = get_next_available_date(bus, search_date)
             message = f"Bus not available on selected date. Next available date: {next_date}"
         
+        segment_price = max(0.0, float(dest_p - src_p))
+        
         results.append({
-            "bus": b,
+            "bus": bus,
             "available": available,
             "availability_message": message,
             "next_available_date": next_date,
-            "pattern_label": get_pattern_label(b)
+            "pattern_label": get_pattern_label(bus),
+            "segment_price": segment_price
         })
-    
-    # 2. Suggestions if no results match both or if all are unavailable
+
+    # 3. Fallback Suggestions logic: find buses for the same destination stop
     suggestions = []
     if not results:
-        # Try to find alternative buses (e.g. same destination but slightly different source)
-        alternative_buses = db.query(Bus).filter(
-            Bus.destination.ilike(f"%{destination}%")
-        ).limit(5).all()
+        # Find any route containing the destination stop
+        alt_query = (
+            db.query(Schedule, DestRS.price_from_start)
+            .join(Route, Schedule.route_id == Route.id)
+            .join(DestRS, Route.id == DestRS.route_id)
+            .join(DestStop, DestRS.stop_id == DestStop.id)
+            .filter(DestStop.name.ilike(f"%{destination}%"))
+            .limit(5)
+        )
         
-        for b in alternative_buses:
-            available = is_available(b, search_date)
-            next_date = None if available else get_next_available_date(b, search_date)
+        alt_schedules = alt_query.all()
+        for sch, dest_p in alt_schedules:
+            bus = sch.bus
+            if not bus: continue
+            
+            available = is_available(bus, search_date)
+            next_date = None if available else get_next_available_date(bus, search_date)
+            
             suggestions.append({
-                "bus": b,
+                "bus": bus,
                 "available": available,
-                "availability_message": f"Alternative route: {b.source} to {b.destination}",
+                "availability_message": f"Alternative route passing through {destination}",
                 "next_available_date": next_date,
-                "pattern_label": get_pattern_label(b)
+                "pattern_label": get_pattern_label(bus),
+                "segment_price": float(dest_p) # Baseline price to destination
             })
 
     return {

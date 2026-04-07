@@ -19,7 +19,7 @@ def get_or_create_route(db: Session, source_id: int, destination_id: int):
     return route
 
 from app.modules.route.model import RouteStoppage
-from app.modules.route.schema import RouteStoppageCreate
+from app.modules.route.schema import RouteStoppageCreate, RouteStoppageUpdate
 from fastapi import HTTPException
 
 def add_route_stoppage(db: Session, route_id: int, data: RouteStoppageCreate):
@@ -37,7 +37,8 @@ def add_route_stoppage(db: Session, route_id: int, data: RouteStoppageCreate):
         arrival_time=data.arrival_time,
         halt_duration=data.halt_duration,
         hotel_id=data.hotel_id,
-        stop_order=data.stop_order
+        stop_order=data.stop_order,
+        price_from_start=data.price_from_start
     )
     db.add(stoppage)
     db.commit()
@@ -54,6 +55,16 @@ def delete_route_stoppage(db: Session, stoppage_id: int):
     if stoppage:
         db.delete(stoppage)
         db.commit()
+    return stoppage
+
+def update_route_stoppage(db: Session, stoppage_id: int, data: RouteStoppageUpdate):
+    stoppage = db.query(RouteStoppage).filter(RouteStoppage.id == stoppage_id).first()
+    if not stoppage:
+        raise HTTPException(status_code=404, detail="Stoppage not found")
+    for k, v in data.dict(exclude_unset=True).items():
+        setattr(stoppage, k, v)
+    db.commit()
+    db.refresh(stoppage)
     return stoppage
 
 
@@ -73,67 +84,38 @@ def create_schedule(db: Session, data, agent_id: int):
 
 
 def get_schedules(db: Session, agent_id: int = None, source: str = None, destination: str = None):
-    from app.modules.master.model import City, Stop
+    from app.modules.master.model import Stop
     from sqlalchemy.orm import aliased
-    from sqlalchemy import or_, and_, exists
-    from app.modules.route.model import RouteStoppage
+    from sqlalchemy import and_
     
-    query = db.query(Schedule).join(Route)
+    query = db.query(Schedule)
     
     if agent_id:
         query = query.filter(Schedule.agent_id == agent_id)
         
     if source or destination:
-        # We need to find routes where Source appears BEFORE Destination.
-        # Sequence: Start City (Order 0) -> Stoppages (Order 1, 2...) -> End City (Order 9999)
+        # Join with Route and RouteStoppage to filter by stops
+        SrcRS = aliased(RouteStoppage)
+        DestRS = aliased(RouteStoppage)
+        SrcStop = aliased(Stop)
+        DestStop = aliased(Stop)
         
-        valid_route_ids = []
-        all_routes = db.query(Route).all()
+        query = query.join(Route, Schedule.route_id == Route.id)
         
-        for r in all_routes:
-            # 1. Map all names to their positions
-            positions = {} # {name: order}
-            
-            # Start City
-            if r.source_city:
-                positions[r.source_city.name.lower()] = 0
-            
-            # Stoppages
-            stoppages = db.query(RouteStoppage).filter(RouteStoppage.route_id == r.id).all()
-            for rs in stoppages:
-                if rs.stop:
-                    positions[rs.stop.name.lower()] = rs.stop_order
-            
-            # End City
-            if r.destination_city:
-                # End city is always last. Give it a high order.
-                positions[r.destination_city.name.lower()] = 9999
-            
-            # 2. Check if source and destination match any names in positions
-            src_order = None
-            if source:
-                # Partial match in positions keys
-                for name, order in positions.items():
-                    if source.lower() in name:
-                        src_order = order
-                        break
-            else:
-                src_order = -1 # Always matches if no source provided
-                
-            dest_order = None
-            if destination:
-                for name, order in positions.items():
-                    if destination.lower() in name:
-                        dest_order = order
-                        break
-            else:
-                dest_order = 10000 # Always matches if no destination provided
-                
-            if src_order is not None and dest_order is not None and src_order < dest_order:
-                valid_route_ids.append(r.id)
+        if source:
+            query = query.join(SrcRS, Route.id == SrcRS.route_id).join(SrcStop, SrcRS.stop_id == SrcStop.id).filter(SrcStop.name.ilike(f"%{source}%"))
         
-        query = query.filter(Schedule.route_id.in_(valid_route_ids))
-        
+        if destination:
+            query = query.join(DestRS, Route.id == DestRS.route_id).join(DestStop, DestRS.stop_id == DestStop.id).filter(DestStop.name.ilike(f"%{destination}%"))
+            
+        if source and destination:
+            # Ensure sequence validation
+            query = query.filter(SrcRS.stop_order < DestRS.stop_order)
+            
+            # If both are provided, we can also dynamically calculate the price for this segment in results
+            # However, Schedule object itself has a 'price' field which is the base price.
+            # For listing purposes, we'll return the schedules that MATCH.
+            
     return query.all()
 
 

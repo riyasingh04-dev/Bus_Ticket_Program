@@ -13,7 +13,16 @@ const PassengerDetails = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { schedule, selectedSeats = [], lockExpiry } = location.state || {};
+  const { 
+    schedule, 
+    selectedSeats = [], 
+    lockExpiry, 
+    pricePerSeat: initialPrice, 
+    searchSource, 
+    searchDestination 
+  } = location.state || {};
+
+  const [currentPricePerSeat, setCurrentPricePerSeat] = useState(initialPrice || schedule?.price || 0);
 
   const [form, setForm] = useState({
     passenger_name: '',
@@ -32,9 +41,8 @@ const PassengerDetails = () => {
   const [lockTimer, setLockTimer] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const pricePerSeat = schedule?.price || 0;
   const numSeats = selectedSeats.length;
-  const baseTotal = numSeats * pricePerSeat;
+  const baseTotal = numSeats * currentPricePerSeat;
   const taxAmount = baseTotal * TAX_RATE;
   const discountAmount = baseTotal * discountPct;
   const finalTotal = baseTotal + taxAmount - discountAmount;
@@ -44,11 +52,41 @@ const PassengerDetails = () => {
     if (schedule?.route_id) {
       setLoadingStoppages(true);
       axios.get(`http://localhost:8000/routes/${schedule.route_id}/stoppages`)
-        .then(res => setStoppages(res.data))
+        .then(res => {
+          const stops = res.data;
+          setStoppages(stops);
+          
+          // Pre-select based on search terms
+          if (searchSource || searchDestination) {
+            const boarding = stops.find(s => s.stop?.name.toLowerCase().includes(searchSource?.toLowerCase()));
+            const dropping = stops.find(s => s.stop?.name.toLowerCase().includes(searchDestination?.toLowerCase()));
+            
+            setForm(prev => ({
+              ...prev,
+              boarding_stop_id: boarding ? String(boarding.stop_id) : prev.boarding_stop_id,
+              dropping_stop_id: dropping ? String(dropping.stop_id) : prev.dropping_stop_id
+            }));
+          }
+        })
         .catch(err => console.error("Could not fetch stoppages", err))
         .finally(() => setLoadingStoppages(false));
     }
-  }, [schedule]);
+  }, [schedule, searchSource, searchDestination]);
+
+  // Recalculate price when stops change
+  useEffect(() => {
+    if (stoppages.length > 0 && form.boarding_stop_id && form.dropping_stop_id) {
+      const src = stoppages.find(s => String(s.stop_id) === String(form.boarding_stop_id));
+      const dest = stoppages.find(s => String(s.stop_id) === String(form.dropping_stop_id));
+      
+      if (src && dest) {
+        const newPrice = Math.max(0, dest.price_from_start - src.price_from_start);
+        if (newPrice > 0) {
+          setCurrentPricePerSeat(newPrice);
+        }
+      }
+    }
+  }, [form.boarding_stop_id, form.dropping_stop_id, stoppages]);
 
   // ── Lock countdown ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -319,7 +357,7 @@ const PassengerDetails = () => {
 
             <div className="summary-rows">
               <div className="summary-row">
-                <span>{numSeats} seat{numSeats > 1 ? 's' : ''} × ₹{pricePerSeat}</span>
+                <span>{numSeats} seat{numSeats > 1 ? 's' : ''} × ₹{currentPricePerSeat}</span>
                 <span>₹{baseTotal.toFixed(2)}</span>
               </div>
               <div className="summary-row">

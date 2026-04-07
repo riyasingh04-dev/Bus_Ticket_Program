@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.dependencies import get_db, RoleChecker
-from app.modules.route.schema import RouteCreate, RouteResponse, ScheduleCreate, ScheduleResponse, RouteStoppageCreate, RouteStoppageResponse, GetOrCreateScheduleRequest
-from app.modules.route.service import get_or_create_route, create_schedule, get_schedules, delete_schedule, get_popular_routes, add_route_stoppage, get_route_stoppages, delete_route_stoppage, get_or_create_bus_schedule
+from app.modules.route.schema import RouteCreate, RouteResponse, ScheduleCreate, ScheduleResponse, RouteStoppageCreate, RouteStoppageResponse, RouteStoppageUpdate, GetOrCreateScheduleRequest
+from app.modules.route.service import get_or_create_route, create_schedule, get_schedules, delete_schedule, get_popular_routes, add_route_stoppage, get_route_stoppages, delete_route_stoppage, get_or_create_bus_schedule, update_route_stoppage
 from app.modules.auth.model import User
 
 router = APIRouter()
@@ -19,6 +19,10 @@ def create_stoppage(route_id: int, data: RouteStoppageCreate, db: Session = Depe
 @router.get("/{route_id}/stoppages", response_model=List[RouteStoppageResponse])
 def fetch_stoppages(route_id: int, db: Session = Depends(get_db)):
     return get_route_stoppages(db, route_id)
+
+@router.patch("/stoppages/{stoppage_id}", response_model=RouteStoppageResponse)
+def update_stoppage(stoppage_id: int, data: RouteStoppageUpdate, db: Session = Depends(get_db), current_user = Depends(admin_only)):
+    return update_route_stoppage(db, stoppage_id, data)
 
 @router.delete("/stoppages/{stoppage_id}")
 def remove_stoppage(stoppage_id: int, db: Session = Depends(get_db), current_user = Depends(admin_only)):

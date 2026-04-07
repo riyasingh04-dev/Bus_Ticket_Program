@@ -101,13 +101,32 @@ def create_booking(db: Session, data, user_id: int):
         print(f"Error: Seats {lock_conflicts} locked by another user")
         return {"error": f"Seat(s) {', '.join(lock_conflicts)} are currently locked by another user."}
 
-    # 3. Coupon / discount
+    # 3. Dynamic Price Calculation based on segment (boarding/dropping)
+    price_per_seat = schedule.price
+    if data.boarding_stop_id and data.dropping_stop_id:
+        from app.modules.route.model import RouteStoppage
+        src_rs = db.query(RouteStoppage).filter(
+            RouteStoppage.route_id == schedule.route_id,
+            RouteStoppage.stop_id == data.boarding_stop_id
+        ).first()
+        dest_rs = db.query(RouteStoppage).filter(
+            RouteStoppage.route_id == schedule.route_id,
+            RouteStoppage.stop_id == data.dropping_stop_id
+        ).first()
+        
+        if src_rs and dest_rs:
+            # Calculate segment price from cumulative price_from_start
+            segment_price = max(0.0, float(dest_rs.price_from_start - src_rs.price_from_start))
+            if segment_price > 0:
+                price_per_seat = segment_price
+
+    # 4. Coupon / discount
     discount_pct = 0.0
     if data.coupon_code:
         discount_pct = VALID_COUPONS.get(data.coupon_code.upper(), 0.0)
 
     num_seats = len(requested_seats)
-    base_price = num_seats * schedule.price
+    base_price = num_seats * price_per_seat
     tax = round(base_price * 0.05, 2)          # 5 % tax
     discount_amount = round(base_price * discount_pct, 2)
     total_price = round(base_price + tax - discount_amount, 2)

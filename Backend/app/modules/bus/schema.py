@@ -48,6 +48,7 @@ class BusSearchResponse(BaseModel):
     availability_message: Optional[str] = None
     next_available_date: Optional[date] = None
     pattern_label: str
+    segment_price: float = 0.0
 
 class BusSearchListResponse(BaseModel):
     search_date: date

@@ -14,6 +14,9 @@ const SeatSelection = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const schedule = location.state?.schedule;
+  const pricePerSeat = location.state?.pricePerSeat;
+  const searchSource = location.state?.searchSource;
+  const searchDestination = location.state?.searchDestination;
 
   const [seatMap, setSeatMap] = useState([]);
   const [selectedSeats, setSelectedSeats] = useState([]);
@@ -152,7 +155,14 @@ const SeatSelection = () => {
         
         // After successful lock, proceed
         navigate(`/user/passenger/${scheduleId}`, {
-          state: { schedule, selectedSeats, lockExpiry: localLockExpiry },
+          state: { 
+            schedule, 
+            selectedSeats, 
+            lockExpiry: localLockExpiry,
+            pricePerSeat: pricePerSeat || schedule?.price || 0,
+            searchSource,
+            searchDestination
+          },
         });
       } catch (err) {
         setError(err.response?.data?.detail || 'Failed to lock seats. They might have been taken just now.');
@@ -162,7 +172,14 @@ const SeatSelection = () => {
     } else {
       // Already locked, just proceed
       navigate(`/user/passenger/${scheduleId}`, {
-        state: { schedule, selectedSeats, lockExpiry },
+        state: { 
+          schedule, 
+          selectedSeats, 
+          lockExpiry,
+          pricePerSeat: pricePerSeat || schedule?.price || 0,
+          searchSource,
+          searchDestination
+        },
       });
     }
   };
@@ -314,7 +331,7 @@ const SeatSelection = () => {
               style={{ left: tooltip.x + 12, top: tooltip.y - 60 }}
             >
               <div><strong>{tooltip.seat.seat}</strong></div>
-              <div>₹{schedule?.price || '—'}</div>
+              <div>₹{pricePerSeat || schedule?.price || '—'}</div>
               <div style={{ textTransform: 'capitalize', color: 
                 tooltip.seat.status === 'available' ? 'var(--success)' :
                 tooltip.seat.status === 'booked' ? 'var(--gray)' :
@@ -335,20 +352,20 @@ const SeatSelection = () => {
             </div>
             <div className="summary-row">
               <span>Price per seat</span>
-              <span>₹{schedule?.price || 0}</span>
+              <span>₹{pricePerSeat || schedule?.price || 0}</span>
             </div>
             <div className="summary-row">
               <span>Base total</span>
-              <span>₹{(selectedSeats.length * (schedule?.price || 0)).toFixed(2)}</span>
+              <span>₹{(selectedSeats.length * (pricePerSeat || schedule?.price || 0)).toFixed(2)}</span>
             </div>
             <div className="summary-row">
               <span>Tax (5%)</span>
-              <span>₹{(selectedSeats.length * (schedule?.price || 0) * 0.05).toFixed(2)}</span>
+              <span>₹{(selectedSeats.length * (pricePerSeat || schedule?.price || 0) * 0.05).toFixed(2)}</span>
             </div>
             <div className="summary-divider" />
             <div className="summary-row summary-total">
               <span>Estimated Total</span>
-              <span>₹{(selectedSeats.length * (schedule?.price || 0) * 1.05).toFixed(2)}</span>
+              <span>₹{(selectedSeats.length * (pricePerSeat || schedule?.price || 0) * 1.05).toFixed(2)}</span>
             </div>
 
             <p className="summary-note">* Final total after coupon applied in next step</p>

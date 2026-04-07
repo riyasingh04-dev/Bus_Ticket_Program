@@ -107,7 +107,10 @@ const SearchBuses = () => {
       navigate(`/user/book/${schedule.id}`, { 
         state: { 
           schedule: schedule, 
-          date: finalDate 
+          date: finalDate,
+          pricePerSeat: res.segment_price || res.bus.price || 499,
+          searchSource: locations.find(l => String(l.id) === String(source))?.name || '',
+          searchDestination: locations.find(l => String(l.id) === String(destination))?.name || ''
         } 
       });
     } catch (err) {
@@ -151,7 +154,7 @@ const SearchBuses = () => {
         </div>
         
         <div className="bus-card-right">
-          <div className="bus-price">₹{bus.price || 499}</div>
+          <div className="bus-price">₹{res.segment_price || res.bus.price || 499}</div>
           <div className="bus-price-label">per seat</div>
           <button 
             className={`btn-book ${!available ? 'btn-secondary' : ''}`} 

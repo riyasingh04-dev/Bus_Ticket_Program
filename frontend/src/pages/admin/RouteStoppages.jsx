@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, Save, Route as RouteIcon, MapPin, Coffee, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Plus, Trash2, Route as RouteIcon, Coffee, AlertCircle, CheckCircle2, Clock, IndianRupee, Edit2, Check, X } from 'lucide-react';
 
 const RouteStoppages = () => {
   const [routes, setRoutes] = useState([]);
@@ -8,17 +8,22 @@ const RouteStoppages = () => {
   const [hotels, setHotels] = useState([]);
   
   const [selectedRouteId, setSelectedRouteId] = useState('');
-  const [stoppages, setStoppages] = useState([]); // from DB
+  const [stoppages, setStoppages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Inline editing state
+  const [editingId, setEditingId] = useState(null);
+  const [editPrice, setEditPrice] = useState('');
 
   // New Stoppage Form
   const [newStoppage, setNewStoppage] = useState({
     stop_id: '',
     arrival_time: '',
     halt_duration: 10,
-    hotel_id: ''
+    hotel_id: '',
+    price_from_start: 0
   });
 
   const token = localStorage.getItem('token');
@@ -72,15 +77,15 @@ const RouteStoppages = () => {
     try {
       const payload = {
         ...newStoppage,
-        stop_order: stoppages.length + 1, // Auto-sequence at the end
+        stop_id: parseInt(newStoppage.stop_id),
+        price_from_start: parseFloat(newStoppage.price_from_start) || 0,
+        stop_order: stoppages.length + 1,
         hotel_id: newStoppage.hotel_id ? parseInt(newStoppage.hotel_id) : null
       };
 
       await axios.post(`http://localhost:8000/routes/${selectedRouteId}/stoppages`, payload, authHeader);
       setSuccess('Stoppage added successfully!');
-      
-      // Reset form but keep time/duration logical
-      setNewStoppage({ stop_id: '', arrival_time: '', halt_duration: 10, hotel_id: '' });
+      setNewStoppage({ stop_id: '', arrival_time: '', halt_duration: 10, hotel_id: '', price_from_start: 0 });
       fetchStoppages(selectedRouteId);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -103,21 +108,43 @@ const RouteStoppages = () => {
     }
   };
 
-  // Filter hotels based on selected stop
+  const startEdit = (stop) => {
+    setEditingId(stop.id);
+    setEditPrice(stop.price_from_start ?? 0);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditPrice('');
+  };
+
+  const savePrice = async (stopId) => {
+    try {
+      await axios.patch(
+        `http://localhost:8000/routes/stoppages/${stopId}`,
+        { price_from_start: parseFloat(editPrice) || 0 },
+        authHeader
+      );
+      setSuccess('Price updated!');
+      setEditingId(null);
+      fetchStoppages(selectedRouteId);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Failed to update price');
+    }
+  };
+
   const availableHotels = hotels.filter(h => h.stop_id === parseInt(newStoppage.stop_id));
 
   return (
     <div className="grid grid-cols-2" style={{ gap: '24px' }}>
+      {/* Left: Form */}
       <div className="card">
         <h3 className="header-title" style={{ fontSize: '18px' }}>Manage Route Map</h3>
         
         <div className="form-group">
           <label>Select Transport Route</label>
-          <select 
-            value={selectedRouteId} 
-            onChange={e => setSelectedRouteId(e.target.value)}
-            className="w-full"
-          >
+          <select value={selectedRouteId} onChange={e => setSelectedRouteId(e.target.value)} className="w-full">
             <option value="">-- Choose Route to Manage --</option>
             {routes.map(r => (
               <option key={r.id} value={r.id}>
@@ -150,15 +177,30 @@ const RouteStoppages = () => {
               </div>
             </div>
 
+            {/* Price from start */}
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <IndianRupee size={14} /> Cumulative Price from Origin (₹)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 0 for origin, 100 for 2nd stop"
+                value={newStoppage.price_from_start}
+                onChange={e => setNewStoppage({...newStoppage, price_from_start: e.target.value})}
+              />
+              <small style={{ color: 'var(--gray)', fontSize: '12px' }}>
+                Ticket price = Destination price − Source price
+              </small>
+            </div>
+
             <div className="form-group" style={{ marginTop: '12px' }}>
               <label>Food Point / Hotel (Optional)</label>
               <select value={newStoppage.hotel_id} onChange={e => setNewStoppage({...newStoppage, hotel_id: e.target.value})} disabled={!newStoppage.stop_id}>
                 <option value="">No food stop</option>
                 {availableHotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
               </select>
-              {newStoppage.stop_id && availableHotels.length === 0 && (
-                <small className="text-gray" style={{ display: 'block', marginTop: '4px' }}>No hotels mapped to this stop location.</small>
-              )}
             </div>
 
             <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', marginTop: '16px' }}>
@@ -171,10 +213,14 @@ const RouteStoppages = () => {
         {success && <div className="alert alert-success" style={{ marginTop: '16px' }}><CheckCircle2 size={16} /> {success}</div>}
       </div>
 
+      {/* Right: Timeline */}
       <div className="card">
         <h3 className="header-title" style={{ fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <RouteIcon size={18} /> Route Timeline Map
         </h3>
+        <p style={{ fontSize: '12px', color: 'var(--gray)', marginBottom: '12px' }}>
+          Click the <Edit2 size={12} style={{ display: 'inline' }} /> icon on any stop to update its cumulative price.
+        </p>
 
         {!selectedRouteId ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--gray)' }}>
@@ -186,17 +232,14 @@ const RouteStoppages = () => {
             
             {stoppages.map((stop, index) => (
               <div key={stop.id} style={{ display: 'flex', gap: '16px', marginBottom: '16px', position: 'relative' }}>
-                {/* Timeline Line */}
                 {index !== stoppages.length - 1 && (
                   <div style={{ position: 'absolute', left: '11px', top: '24px', bottom: '-16px', width: '2px', backgroundColor: 'var(--border)' }}></div>
                 )}
                 
-                {/* Timeline Dot */}
-                <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, fontSize: '12px' }}>
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, fontSize: '12px', flexShrink: 0 }}>
                   {stop.stop_order}
                 </div>
                 
-                {/* Content */}
                 <div style={{ flex: 1, backgroundColor: 'var(--background)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
@@ -210,6 +253,35 @@ const RouteStoppages = () => {
                     <button className="text-danger" onClick={() => handleDeleteStoppage(stop.id)} title="Remove Stoppage"><Trash2 size={16} /></button>
                   </div>
                   
+                  {/* Price Edit Row */}
+                  <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <IndianRupee size={14} style={{ color: 'var(--primary)' }} />
+                    {editingId === stop.id ? (
+                      <>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editPrice}
+                          onChange={e => setEditPrice(e.target.value)}
+                          style={{ width: '100px', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--primary)', fontSize: '13px' }}
+                          autoFocus
+                        />
+                        <button onClick={() => savePrice(stop.id)} title="Save" style={{ color: 'green', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}><Check size={16} /></button>
+                        <button onClick={cancelEdit} title="Cancel" style={{ color: 'red', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}><X size={16} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--primary)' }}>
+                          ₹{stop.price_from_start ?? 0} from origin
+                        </span>
+                        <button onClick={() => startEdit(stop)} title="Edit price" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray)', padding: '2px' }}>
+                          <Edit2 size={13} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+
                   {stop.hotel && (
                     <div style={{ marginTop: '8px', padding: '8px', backgroundColor: 'var(--card)', borderRadius: '6px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border)' }}>
                       <Coffee size={14} className="text-secondary" />

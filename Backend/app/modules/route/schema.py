@@ -10,9 +10,18 @@ class RouteStoppageBase(BaseModel):
     halt_duration: int
     hotel_id: Optional[int] = None
     stop_order: int
+    price_from_start: float = 0.0
 
 class RouteStoppageCreate(RouteStoppageBase):
     pass
+
+class RouteStoppageUpdate(BaseModel):
+    stop_id: Optional[int] = None
+    arrival_time: Optional[str] = None
+    halt_duration: Optional[int] = None
+    hotel_id: Optional[int] = None
+    stop_order: Optional[int] = None
+    price_from_start: Optional[float] = None
 
 class RouteStoppageResponse(RouteStoppageBase):
     id: int

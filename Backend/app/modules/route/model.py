@@ -14,6 +14,8 @@ class Route(Base):
 
     __table_args__ = (UniqueConstraint('source_id', 'destination_id', name='_source_destination_uc'),)
 
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, UniqueConstraint, Index, CheckConstraint
+
 class RouteStoppage(Base):
     __tablename__ = "route_stoppages"
     
@@ -23,13 +25,18 @@ class RouteStoppage(Base):
     arrival_time = Column(String(50), nullable=False)
     halt_duration = Column(Integer, nullable=False) # Minutes
     hotel_id = Column(Integer, ForeignKey("hotels.id"), nullable=True)
-    stop_order = Column(Integer, nullable=False)
+    stop_order = Column(Integer, nullable=False) # serves as sequence_order
+    price_from_start = Column(Float, default=0.0) # cumulative price from origin
     
     route = relationship("app.modules.route.model.Route")
     stop = relationship("app.modules.master.model.Stop")
     hotel = relationship("app.modules.master.model.Hotel")
 
-    __table_args__ = (UniqueConstraint('route_id', 'stop_id', name='_route_stop_uc'),)
+    __table_args__ = (
+        UniqueConstraint('route_id', 'stop_id', name='_route_stop_uc'),
+        Index('idx_route_stop_order', 'route_id', 'stop_order'),
+        CheckConstraint('price_from_start >= 0', name='check_price_positive'),
+    )
 class Schedule(Base):
     __tablename__ = "schedules"
     
