@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import SearchableSelect from '../../components/SearchableSelect';
+import { AuthContext } from '../../context/AuthContext';
 import {
   MapPin, ArrowLeftRight, Calendar, Bus,
-  Search, TrendingUp, ArrowRight, Zap, Shield, Clock, Flame, AlertTriangle
+  Search, TrendingUp, ArrowRight, Zap, Shield, Clock, Flame, AlertTriangle, Ticket
 } from 'lucide-react';
 
 const UserDashboard = () => {
+  const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [source, setSource] = useState('');
   const [destination, setDestination] = useState('');
@@ -16,6 +18,8 @@ const UserDashboard = () => {
   const [popularRoutes, setPopularRoutes] = useState([]);
   const [locations, setLocations] = useState([]); // Combined cities and stops
   const [routesLoading, setRoutesLoading] = useState(true);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,6 +55,15 @@ const UserDashboard = () => {
           setPopularRoutes(rRes.data || []);
         } catch (e) { console.error("Popular routes fetch failed", e); }
 
+        // Fetch recent activity if logged in
+        if (token) {
+          setActivityLoading(true);
+          try {
+            const aRes = await axios.get('http://localhost:8000/analytics/user/activity', authHeader);
+            setRecentActivity(aRes.data || []);
+          } catch (e) { console.error("Activity fetch failed", e); }
+        }
+
       } catch (err) {
         console.error("Critical error in fetchData", err);
       } finally {
@@ -84,8 +97,12 @@ const UserDashboard = () => {
       {/* ── Hero ── */}
       <section className="hero-section">
         <div className="hero-badge"><Zap size={13} /> 10,000+ Routes Available</div>
-        <h1 className="hero-title">Book Bus Tickets</h1>
-        <p className="hero-subtitle">Travel comfortably across validated routes nationwide</p>
+        <h1 className="hero-title">
+          {user ? `Welcome back, ${user.name}` : 'Book Bus Tickets'}
+        </h1>
+        <p className="hero-subtitle">
+          {user ? 'Track your journeys and book new ones with ease.' : 'Travel comfortably across validated routes nationwide'}
+        </p>
       </section>
 
       {/* ── Search Card ── */}
@@ -139,6 +156,41 @@ const UserDashboard = () => {
           </form>
         </div>
       </div>
+
+      {/* ── User Specific: Recent Activity ── */}
+      {user && recentActivity.length > 0 && (
+        <section style={{ padding: '0 40px', marginTop: '40px' }}>
+          <h2 className="section-title" style={{ fontSize: '18px', marginBottom: '20px' }}>
+            <Clock size={20} /> Your Recent Activity
+          </h2>
+          <div className="grid grid-cols-2" style={{ gap: '20px' }}>
+            {recentActivity.map(booking => (
+              <div key={booking.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'transform 0.2s' }} onClick={() => navigate('/user/bookings')}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(79, 70, 229, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ticket size={20} />
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '15px' }}>Booking #{booking.id}</h4>
+                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--gray)' }}>Seats: {booking.seat_numbers} • {new Date(booking.booking_date).toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ 
+                    padding: '4px 10px', 
+                    borderRadius: '20px', 
+                    fontSize: '11px', 
+                    fontWeight: 700,
+                    background: booking.status === 'Confirmed' ? '#DCFCE7' : '#FEE2E2',
+                    color: booking.status === 'Confirmed' ? '#166534' : '#991B1B'
+                  }}>{booking.status}</span>
+                  <p style={{ margin: '4px 0 0', fontSize: '13px', fontWeight: 700 }}>₹{booking.total_price}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Features Strip ── */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '40px', padding: '40px 40px 0', flexWrap: 'wrap' }}>

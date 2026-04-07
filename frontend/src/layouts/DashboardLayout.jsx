@@ -15,9 +15,15 @@ const DashboardLayout = () => {
   return (
     <div className="layout-container">
       <aside className="sidebar">
-        <div className="sidebar-header">
-          <h2>ExpressBus</h2>
-          <span className="role-badge">{user?.role}</span>
+        <div className="sidebar-header" style={{ paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '20px' }}>
+          <h2 style={{ margin: 0, fontSize: '22px' }}>ExpressBus</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+            <span className="role-badge">{user?.role}</span>
+          </div>
+          <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--gray-light)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10B981' }}></div>
+            {user?.name || 'Logged In'}
+          </p>
         </div>
         
         <nav className="sidebar-nav">
@@ -29,6 +35,9 @@ const DashboardLayout = () => {
                 </li>
                 <li>
                   <Link to="/admin/agents"><Users size={20} /> Manage Agents</Link>
+                </li>
+                <li>
+                  <Link to="/admin/ledger"><Ticket size={20} /> Ledger & Earnings</Link>
                 </li>
                 <li>
                   <Link to="/admin/masters"><Settings size={20} /> Master Data</Link>

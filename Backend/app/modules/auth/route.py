@@ -31,12 +31,15 @@ def register(data: RegisterSchema, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(data: LoginSchema, db: Session = Depends(get_db)):
-    token = login_user(db, data)
+    result = login_user(db, data)
 
-    if not token:
+    if not result:
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if isinstance(result, dict) and "error" in result:
+        raise HTTPException(status_code=403, detail=result["error"])
 
-    return {"access_token": token}
+    return {"access_token": result}
 
 
 @router.post("/change-password")

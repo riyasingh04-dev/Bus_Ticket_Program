@@ -30,9 +30,14 @@ def login_user(db: Session, data):
     if not verify_password(data.password, user.password_hash):
         return None
 
+    if not user.is_active:
+        return {"error": "Admin deactivate you"}
+
     token = create_access_token({
         "user_id": user.id,
-        "role": user.role   # 👈 IMPORTANT
+        "name": user.name,
+        "email": user.email,
+        "role": user.role
     })
 
     return token

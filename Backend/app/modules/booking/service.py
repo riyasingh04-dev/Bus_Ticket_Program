@@ -157,6 +157,10 @@ def create_booking(db: Session, data, user_id: int):
     # 4. Release seat locks after confirmed booking
     seat_lock_store.release_seats(data.schedule_id, user_id)
 
+    # 5. Record in Ledger
+    from app.modules.ledger.service import record_transaction
+    record_transaction(db, new_booking, entry_type="CREDIT")
+
     return new_booking
 
 
@@ -176,4 +180,9 @@ def cancel_booking(db: Session, booking_id: int, user_id: int):
         return None
     booking.status = "Cancelled"
     db.commit()
+    
+    # Record in Ledger as DEBIT
+    from app.modules.ledger.service import record_transaction
+    record_transaction(db, booking, entry_type="DEBIT")
+    
     return booking

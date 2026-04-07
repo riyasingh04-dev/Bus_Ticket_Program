@@ -57,8 +57,11 @@ const UserLayout = () => {
 
         {/* Actions */}
         <div className="user-navbar-actions">
-          <div className="user-avatar-btn" title={user?.name || user?.email}>
-            <User size={18} />
+          <div className="user-identity" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '10px' }}>
+            <div className="user-avatar-btn" title={user?.name || user?.email}>
+              <User size={18} />
+            </div>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--gray)' }}>{user?.name || 'User'}</span>
           </div>
           <button className="user-logout-btn" onClick={handleLogout}>
             <LogOut size={16} />

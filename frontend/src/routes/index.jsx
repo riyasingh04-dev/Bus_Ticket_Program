@@ -9,6 +9,7 @@ import Register from "../pages/auth/Register";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 import ManageAgents from "../pages/admin/ManageAgents";
 import AdminMasters from "../pages/admin/AdminMasters";
+import AdminLedger from "../pages/admin/AdminLedger";
 
 // Agent
 import AgentDashboard from "../pages/agent/AgentDashboard";
@@ -60,6 +61,7 @@ const AppRoutes = () => {
           <Route element={<DashboardLayout />}>
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/agents" element={<ManageAgents />} />
+            <Route path="/admin/ledger" element={<AdminLedger />} />
             <Route path="/admin/masters" element={<AdminMasters />} />
           </Route>
         </Route>

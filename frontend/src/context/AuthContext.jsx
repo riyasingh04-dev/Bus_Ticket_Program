@@ -14,6 +14,8 @@ export const AuthProvider = ({ children }) => {
         const decoded = jwtDecode(token);
         setUser({
           id: decoded.user_id,
+          name: decoded.name,
+          email: decoded.email,
           role: decoded.role
         });
       } catch (err) {

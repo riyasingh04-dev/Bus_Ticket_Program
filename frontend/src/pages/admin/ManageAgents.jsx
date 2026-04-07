@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import axios from 'axios';
+import { AuthContext } from '../../context/AuthContext';
 
 const ManageAgents = () => {
+  const { user } = useContext(AuthContext);
   const [agents, setAgents] = useState([]);
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
@@ -50,26 +52,28 @@ const ManageAgents = () => {
 
   return (
     <div className="grid grid-cols-2">
-      <div className="card">
-        <h2 className="header-title">Create New Agent</h2>
-        <form onSubmit={handleCreateAgent}>
-          <div className="form-group">
-            <label>Name</label>
-            <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-          </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-          </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input required type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-          </div>
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Creating..." : "Create Agent"}
-          </button>
-        </form>
-      </div>
+      {user?.role === 'admin' && (
+        <div className="card">
+          <h2 className="header-title">Create New Agent</h2>
+          <form onSubmit={handleCreateAgent}>
+            <div className="form-group">
+              <label>Name</label>
+              <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>Email</label>
+              <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>Password</label>
+              <input required type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+            </div>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? "Creating..." : "Create Agent"}
+            </button>
+          </form>
+        </div>
+      )}
 
       <div className="card">
         <h2 className="header-title">Agent List</h2>

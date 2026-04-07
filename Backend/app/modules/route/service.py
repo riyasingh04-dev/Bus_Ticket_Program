@@ -125,6 +125,19 @@ def delete_schedule(db: Session, schedule_id: int, agent_id: int):
     ).first()
     if not schedule:
         return None
+        
+    # Check for existing bookings to prevent IntegrityError (FK constraint)
+    booking_exists = db.query(Booking).filter(
+        Booking.schedule_id == schedule_id,
+        Booking.status != "Cancelled"
+    ).first()
+    
+    if booking_exists:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot delete schedule because there are active bookings. Cancel the bookings first."
+        )
+        
     db.delete(schedule)
     db.commit()
     return schedule
@@ -151,8 +164,6 @@ def get_popular_routes(db: Session, limit: int = 6):
         bus_ids = [b.id for b in buses]
         
         # 3. Calculate metrics for this route
-        # Min price from any bus on this route
-        min_price = min((b.price for b in buses if b.price), default=499.0)
         
         # Total bookings across all schedules for these buses
         booking_count = (
@@ -162,6 +173,18 @@ def get_popular_routes(db: Session, limit: int = 6):
             .filter(Booking.status != "Cancelled")
             .scalar() or 0
         )
+        
+        # Min price from any active/future schedule for this route
+        min_price = (
+            db.query(func.min(Schedule.price))
+            .filter(Schedule.bus_id.in_(bus_ids))
+            .filter(func.date(Schedule.departure_time) >= date.today())
+            .scalar()
+        )
+        
+        # Fallback to bus min price if no future schedules exist
+        if min_price is None:
+            min_price = min((b.price for b in buses if b.price), default=499.0)
         
         # 4. Check total vs booked seats for "available_seats" (simplified)
         # We look at all "current/future" schedules

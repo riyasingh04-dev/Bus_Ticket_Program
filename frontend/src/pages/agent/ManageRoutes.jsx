@@ -112,6 +112,7 @@ const ManageRoutes = () => {
       });
       fetchData();
     } catch (err) {
+      alert(err.response?.data?.detail || "Failed to delete schedule");
       console.error(err);
     }
   };
